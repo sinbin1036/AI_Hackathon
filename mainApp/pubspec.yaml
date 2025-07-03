@@ -39,6 +39,7 @@ dependencies:
   csv: ^5.1.1
   path_provider: ^2.1.3
   flutter_dotenv: ^5.0.2
+  proj4dart: any
 
 dev_dependencies:
   flutter_test:

@@ -7,6 +7,8 @@ import 'DeviceInfoScreen.dart';
 import 'ChargingStationScreen.dart';
 import 'ProfileScreen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:proj4dart/proj4dart.dart';
+import 'dart:math';
 
 class MainMapScreen extends StatefulWidget {
   const MainMapScreen({super.key});
@@ -110,7 +112,9 @@ class _MainMapContentState extends State<MainMapContent> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                        BoxShadow(color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2)),
                       ],
                     ),
                     alignment: Alignment.centerLeft,
@@ -126,7 +130,8 @@ class _MainMapContentState extends State<MainMapContent> {
                         await _searchAndMove(query);
                       },
                     )
-                        : const Text('주소 검색', style: TextStyle(color: Colors.grey)),
+                        : const Text(
+                        '주소 검색', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
               ),
@@ -135,7 +140,8 @@ class _MainMapContentState extends State<MainMapContent> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const RouteSummaryScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const RouteSummaryScreen()),
                   );
                 },
                 child: Image.asset(
@@ -162,14 +168,42 @@ class _MainMapContentState extends State<MainMapContent> {
     );
   }
 
-  // 주소 -> 좌표 변환 및 지도 이동
-  Future<void> _searchAndMove(String address) async {
+// 네이버 검색(Local) API를 통한 키워드(상호/역/POI) → 좌표 변환
+  Future<NLatLng?> fetchLatLngFromKeyword(String keyword) async {
+    final clientId = dotenv.env['NAVER_SEARCH_CLIENT_ID'];
+    final clientSecret = dotenv.env['NAVER_SEARCH_CLIENT_SECRET'];
+    final encoded = Uri.encodeComponent(keyword);
+    final url = 'https://openapi.naver.com/v1/search/local.json?query=$encoded';
+
+    final res = await http.get(
+      Uri.parse(url),
+      headers: {
+        'X-Naver-Client-Id': clientId!,
+        'X-Naver-Client-Secret': clientSecret!,
+      },
+    );
+
+    if (res.statusCode == 200) {
+      final jsonData = json.decode(res.body);
+      final items = jsonData['items'];
+      if (items != null && items.isNotEmpty) {
+        final first = items[0];
+        final lng = double.parse(first['mapx'].toString()) / 10000000.0;
+        final lat = double.parse(first['mapy'].toString()) / 10000000.0;
+        print('[Local검색 좌표 변환] lat: $lat, lng: $lng');
+        return NLatLng(lat, lng);
+      }
+    }
+    return null;
+  }
+
+// 기존 _searchAndMove 함수는 그대로 사용
+  Future<void> _searchAndMove(String query) async {
     setState(() {
       _error = null;
     });
-    final latLng = await fetchLatLngFromAddress(address); // 선언 위치 주의
+    final latLng = await fetchLatLngFromKeyword(query); // 변환 적용!
     if (latLng != null && _mapController != null) {
-      // 🔥🔥 최신 방식: withParams로 한 번에 이동 + 줌! 🔥🔥
       await _mapController!.updateCamera(
         NCameraUpdate.withParams(
           target: latLng,
@@ -182,48 +216,8 @@ class _MainMapContentState extends State<MainMapContent> {
       });
     } else {
       setState(() {
-        _error = '주소를 찾을 수 없습니다.';
+        _error = '검색 결과를 찾을 수 없습니다.';
       });
     }
-  }
-
-  // 반드시 _searchAndMove 함수 "아래에" 선언!
-  Future<NLatLng?> fetchLatLngFromAddress(String address) async {
-    // TODO: 아래 clientId/clientSecret을 .env에서 불러오거나 안전하게 관리
-    final clientId = dotenv.env['NAVER_CLIENT_ID'];
-    final clientSecret = dotenv.env['NAVER_CLIENT_SECRET'];
-    final encoded = Uri.encodeComponent(address);
-    final url = 'https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=$encoded';
-
-    print('[Geocode 요청] address: $address');
-    print('[Geocode 요청] url: $url');
-
-    final res = await http.get(
-      Uri.parse(url),
-      headers: {
-        'X-NCP-APIGW-API-KEY-ID': clientId!,
-        'X-NCP-APIGW-API-KEY': clientSecret!,
-      },
-    );
-    print('[Geocode 응답] statusCode: ${res.statusCode}');
-    print('[Geocode 응답] body: ${res.body}');
-
-    if (res.statusCode == 200) {
-      final jsonData = json.decode(res.body);
-      print('[Geocode 파싱] json: $jsonData');
-      final addresses = jsonData['addresses'];
-      if (addresses != null && addresses.isNotEmpty) {
-        final addr = addresses[0];
-        final lat = double.parse(addr['y']);
-        final lng = double.parse(addr['x']);
-        print('[Geocode 좌표] lat: $lat, lng: $lng');
-        return NLatLng(lat, lng);
-      } else {
-        print('[Geocode] addresses 없음');
-      }
-    } else {
-      print('[Geocode] status 200 아님');
-    }
-    return null;
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'MainMapScreen.dart';
 import 'NavigationScreen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 class RouteSummaryScreen extends StatefulWidget {
@@ -13,6 +16,45 @@ class RouteSummaryScreen extends StatefulWidget {
 
 class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
   int selectedIndex = 0;
+  final TextEditingController _startController = TextEditingController();
+  final TextEditingController _endController = TextEditingController();
+
+  @override
+  void dispose() {
+    _startController.dispose();
+    _endController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String keyword) async {
+    final clientId = dotenv.env['NAVER_SEARCH_CLIENT_ID'];
+    final clientSecret = dotenv.env['NAVER_SEARCH_CLIENT_SECRET'];
+    final encoded = Uri.encodeComponent(keyword);
+    final url = 'https://openapi.naver.com/v1/search/local.json?query=$encoded';
+
+    final res = await http.get(
+      Uri.parse(url),
+      headers: {
+        'X-Naver-Client-Id': clientId!,
+        'X-Naver-Client-Secret': clientSecret!,
+      },
+    );
+
+    if (res.statusCode == 200) {
+      final jsonData = json.decode(res.body);
+      final items = jsonData['items'];
+      if (items != null && items.isNotEmpty) {
+        final first = items[0];
+        final lng = double.parse(first['mapx'].toString()) / 10000000.0;
+        final lat = double.parse(first['mapy'].toString()) / 10000000.0;
+        print('[검색 좌표] $keyword -> lat: $lat, lng: $lng');
+      } else {
+        print('[검색 실패] 결과 없음: $keyword');
+      }
+    } else {
+      print('[검색 실패] 상태 코드 ${res.statusCode}');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,15 +62,12 @@ class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 지도 이미지 배경 (PNG)
           Positioned.fill(
             child: Image.asset(
               'assets/images/map_sample.png',
               fit: BoxFit.cover,
             ),
           ),
-
-          // 상단 전체 흰 배경 박스
           Positioned(
             top: 0,
             left: 0,
@@ -39,13 +78,10 @@ class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 왼쪽: 순서 전환 버튼
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: GestureDetector(
-                      onTap: () {
-                        // TODO: 출발지/도착지 순서 전환 기능 구현
-                      },
+                      onTap: () {},
                       child: Image.asset(
                         'assets/images/change.png',
                         height: 32,
@@ -54,20 +90,16 @@ class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // 주소 입력 박스들
                   Expanded(
                     child: Column(
                       children: [
-                        _buildSearchField('내 위치'),
+                        _buildSearchField('내 위치', _startController),
                         const SizedBox(height: 8),
-                        _buildSearchField('내 목적지'),
+                        _buildSearchField('내 목적지', _endController),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // 오른쪽: 닫기 버튼
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: GestureDetector(
@@ -141,7 +173,7 @@ class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
   }
 
   // 출발지/도착지 박스 UI
-  Widget _buildSearchField(String label) {
+  Widget _buildSearchField(String label, TextEditingController controller) {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -150,9 +182,12 @@ class _RouteSummaryScreenState extends State<RouteSummaryScreen> {
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.centerLeft,
-      child: Text(
-        label,
-        style: const TextStyle(color: Colors.grey),
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          hintText: label,
+          border: InputBorder.none,
+        ),
       ),
     );
   }

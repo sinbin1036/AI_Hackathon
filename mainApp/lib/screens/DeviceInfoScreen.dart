@@ -56,6 +56,18 @@ class DeviceInfoScreen extends StatelessWidget {
               const SizedBox(height: 16),
               const TextField(
                 decoration: InputDecoration(
+                  hintText: '체중 입력 (kg)',
+                  filled: true,
+                  fillColor: Color(0xFFF5F5F5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const TextField(
+                decoration: InputDecoration(
                   hintText: '마지막 점검일 입력',
                   filled: true,
                   fillColor: Color(0xFFF5F5F5),
@@ -227,6 +239,16 @@ class DeviceInfoScreen extends StatelessWidget {
                     SizedBox(height: 4),
                     Text(
                       '24V x 30Ah 배터리 총 용량 720Wh',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      '사용자 체중',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '70kg',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
