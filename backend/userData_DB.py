@@ -1,3 +1,4 @@
+# create_db.py
 import sqlite3
 
 def create_user_table():
@@ -5,10 +6,10 @@ def create_user_table():
     cur = conn.cursor()
     cur.execute('''
     CREATE TABLE IF NOT EXISTS user_profile (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
+        id TEXT PRIMARY KEY,
+        brand_name TEXT NOT NULL,
         user_weight REAL NOT NULL,
-        battery_percent REAL NOT NULL
+        battery_soc REAL NOT NULL
     )
     ''')
     conn.commit()
