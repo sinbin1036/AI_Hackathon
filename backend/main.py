@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from geopy.distance import geodesic
 from typing import List, Optional
 from ai_module import EnhancedEnergyPredictor, NavigationSystem
+import sqlite3
 
 # 데이터 모델 정의
 class Point(BaseModel):
@@ -50,7 +51,43 @@ energy_model_path = 'models/energy_predictor.pkl'
 predictor = EnhancedEnergyPredictor(speed_model_path, energy_model_path)
 nav_system = NavigationSystem(predictor)
 
-# 기존 단일 세그먼트 예측 엔드포인트
+# flutter에서 db로 저장연결 해주는 로직
+@app.post('/api/save-device-info')
+async def save_device_info(request: Request):
+    data = await request.json()
+    user_id = data.get("id", "apple")  # 예시 기본값 "apple"
+    brand_name = data.get("brand_name")
+    user_weight = data.get("user_weight")
+    battery_soc = data.get("battery_soc")
+
+    if not (brand_name and battery_soc and user_weight):
+        raise HTTPException(status_code=400, detail="모든 필드 필요")
+
+    try:
+        conn = sqlite3.connect('userData.db')
+        cur = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id TEXT PRIMARY KEY,
+                brand_name TEXT NOT NULL,
+                user_weight REAL NOT NULL,
+                battery_soc REAL NOT NULL
+            )
+        ''')
+
+        # ✅ 동일 ID 있으면 덮어쓰기
+        cur.execute('''
+            INSERT OR REPLACE INTO user_profile (id, brand_name, user_weight, battery_soc)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, brand_name, user_weight, battery_soc))
+
+        conn.commit()
+        conn.close()
+        return {"result": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 기존 단일 세그먼트 예측 엔드포인트 (변경 없음)
 @app.post('/predict-energy', response_model=EnergyPredictResponse)
 def predict_energy(data: EnergyPredictRequest):
     try:
@@ -66,11 +103,10 @@ def predict_energy(data: EnergyPredictRequest):
         print(e)
         raise HTTPException(status_code=400, detail=str(e))
     
-# 새로운 경로 처리 엔드포인트
+# 기존 경로 처리 엔드포인트 (변경 없음)
 @app.post('/process-route', response_model=List[RouteResponse])
 def process_route(route_request: RouteRequest):
     try:
-        # 1. 포인트 리스트를 세그먼트로 변환
         segments = []
         points = route_request.points
         
@@ -78,15 +114,13 @@ def process_route(route_request: RouteRequest):
             start = points[i]
             end = points[i+1]
             
-            # 거리 계산 (km)
             distance_km = geodesic(
                 (start.lat, start.lng),
                 (end.lat, end.lng)
             ).km
             
-            # 경사도 계산
             elevation_diff = end.elevation - start.elevation
-            horizontal_distance = distance_km * 1000  # km → m 변환
+            horizontal_distance = distance_km * 1000
             slope_percent = (elevation_diff / horizontal_distance) * 100 if horizontal_distance > 0 else 0
             
             segments.append({
@@ -94,13 +128,11 @@ def process_route(route_request: RouteRequest):
                 "slope_percent": slope_percent
             })
         
-        # 2. AI 모듈 입력 형식 구성
         route = {
             "id": route_request.route_id or "default_route",
             "segments": segments
         }
 
-        # 3. AI 예측 수행
         results = nav_system.analyze_routes(
             routes=[route],
             user_data=route_request.user_data,
@@ -113,7 +145,63 @@ def process_route(route_request: RouteRequest):
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
-# 서버 상태 확인용 엔드포인트
+# --- 새로 추가한 브랜드별 배터리 용량 자동 적용 엔드포인트 ---
+
+# 브랜드별 배터리 용량(Wh) 매핑
+BRAND_BATTERY = {
+    "PERMOBIL": 720,          # 24V x 30Ah
+    "SUNRISE MEDICAL": 672,   # 24V x 28Ah
+    "WHILL": 768              # 24V x 32Ah
+}
+
+class RouteRequestWithBrand(BaseModel):
+    brand: str  # Permobil, Sunrise Medical, WHILL
+    points: List[Point]
+    user_data: dict
+    soc: Optional[float] = 80
+
+@app.post('/process-route-brand', response_model=RouteResponse)
+def process_route_brand(request: RouteRequestWithBrand):
+    brand_upper = request.brand.strip().upper()
+    if brand_upper not in BRAND_BATTERY:
+        raise HTTPException(status_code=400, detail="지원하지 않는 브랜드입니다.")
+    
+    battery_data = {"capacity": BRAND_BATTERY[brand_upper], "soc": request.soc}
+    
+    segments = []
+    points = request.points
+    for i in range(len(points) - 1):
+        start = points[i]
+        end = points[i+1]
+        
+        distance_km = geodesic(
+            (start.lat, start.lng),
+            (end.lat, end.lng)
+        ).km
+        
+        elevation_diff = end.elevation - start.elevation
+        horizontal_distance = distance_km * 1000
+        slope_percent = (elevation_diff / horizontal_distance) * 100 if horizontal_distance > 0 else 0
+        
+        segments.append({
+            "distance_km": distance_km,
+            "slope_percent": slope_percent
+        })
+    
+    route = {
+        "id": "brand_route",
+        "segments": segments
+    }
+    
+    results = nav_system.analyze_routes(
+        routes=[route],
+        user_data=request.user_data,
+        battery_data=battery_data
+    )
+    
+    return results[0]
+
+# 서버 상태 확인용 엔드포인트 (변경 없음)
 @app.get("/health")
 def health_check():
     return {"status": "ok", "version": "1.0.0"}

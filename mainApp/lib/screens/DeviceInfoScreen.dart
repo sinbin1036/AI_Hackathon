@@ -1,9 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class DeviceInfoScreen extends StatelessWidget {
+class DeviceInfoScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
   const DeviceInfoScreen({super.key, this.onBack});
+
+  @override
+  State<DeviceInfoScreen> createState() => _DeviceInfoScreenState();
+}
+
+class _DeviceInfoScreenState extends State<DeviceInfoScreen> {
+  // 입력값 컨트롤러
+  final brandNameController = TextEditingController();
+  final batterySocController = TextEditingController();
+  final userWeightController = TextEditingController();
+  final lastCheckController = TextEditingController();
+
+  // FastAPI로 POST (userWeight는 double로 변환)
+  Future<void> saveDeviceInfoToServer() async {
+    final url = Uri.parse("http://10.0.2.2:8000/api/save-device-info"); // 서버IP로 변경
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: json.encode({
+        "brand_name": brandNameController.text,
+        "battery_soc": batterySocController.text,
+        "user_weight": double.tryParse(userWeightController.text) ?? 0,
+        // "last_check": lastCheckController.text, // 필요하면 서버에도 필드 추가
+      }),
+    );
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('서버에 저장 완료!')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('저장 실패: ${response.body}')),
+
+      );
+    }
+  }
 
   void _showEditDeviceDialog(BuildContext context) {
     showDialog(
@@ -30,8 +68,9 @@ class DeviceInfoScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              const TextField(
-                decoration: InputDecoration(
+              TextField(
+                controller: brandNameController,
+                decoration: const InputDecoration(
                   hintText: '모델명 입력',
                   filled: true,
                   fillColor: Color(0xFFF5F5F5),
@@ -42,8 +81,9 @@ class DeviceInfoScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(
+              TextField(
+                controller: batterySocController,
+                decoration: const InputDecoration(
                   hintText: '배터리 정보 입력',
                   filled: true,
                   fillColor: Color(0xFFF5F5F5),
@@ -54,21 +94,11 @@ class DeviceInfoScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(
+              TextField(
+                controller: userWeightController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
                   hintText: '체중 입력 (kg)',
-                  filled: true,
-                  fillColor: Color(0xFFF5F5F5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(
-                  hintText: '마지막 점검일 입력',
                   filled: true,
                   fillColor: Color(0xFFF5F5F5),
                   border: OutlineInputBorder(
@@ -79,7 +109,10 @@ class DeviceInfoScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  await saveDeviceInfoToServer();
+                  if (mounted) Navigator.pop(context);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF41867C),
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
@@ -158,7 +191,7 @@ class DeviceInfoScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: onBack?.call,
+          onPressed: widget.onBack?.call,
         ),
       ),
       body: SafeArea(
@@ -287,7 +320,9 @@ class DeviceInfoScreen extends StatelessWidget {
               const SizedBox(height: 32),
               Center(
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    _showEditDeviceDialog(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF41867C),
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
