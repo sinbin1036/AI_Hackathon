@@ -20,7 +20,7 @@ class _DeviceInfoScreenState extends State<DeviceInfoScreen> {
 
   // FastAPI로 POST (userWeight는 double로 변환)
   Future<void> saveDeviceInfoToServer() async {
-    final url = Uri.parse("http://10.0.2.2:8000/api/save-device-info"); // 서버IP로 변경
+    final url = Uri.parse("http://192.168.219.102:8000/api/save-device-info"); // 서버IP로 변경
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},

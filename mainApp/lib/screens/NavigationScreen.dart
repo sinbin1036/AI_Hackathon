@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
 class NavigationScreen extends StatelessWidget {
-  const NavigationScreen({super.key});
+  final List<List<double>> routePath; // ⬅️ 외부에서 전달받은 경로
+
+  const NavigationScreen({super.key, required this.routePath});
 
   @override
   Widget build(BuildContext context) {
+    print('[경로 좌표 개수]: ${routePath.length}');
+    print('[첫 좌표]: ${routePath.isNotEmpty ? routePath.first : '없음'}');
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
+          // 여기에 네이버지도 위젯을 쓰면 Polyline 표시 가능
           Positioned.fill(
             child: Image.asset(
               'assets/images/map_sample.png',
