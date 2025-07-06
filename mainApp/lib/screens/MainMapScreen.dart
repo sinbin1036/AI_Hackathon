@@ -7,8 +7,6 @@ import 'DeviceInfoScreen.dart';
 import 'ChargingStationScreen.dart';
 import 'ProfileScreen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:proj4dart/proj4dart.dart';
-import 'dart:math';
 
 class MainMapScreen extends StatefulWidget {
   const MainMapScreen({super.key});
